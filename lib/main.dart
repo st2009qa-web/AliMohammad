@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart'; // استيراد مكتبة الفيديو
+import 'package:video_player/video_player.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 void main() {
   runApp(const JordanTourismApp());
 }
 
+// -------------------------------------------------------------------------
+// القالب الرئيسي
+// -------------------------------------------------------------------------
 class JordanTourismApp extends StatelessWidget {
   const JordanTourismApp({super.key});
 
@@ -12,17 +16,23 @@ class JordanTourismApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'سياحة الأردن',
+      title: 'اكتشف الأردن',
       theme: ThemeData(
-        primarySwatch: Colors.deepOrange,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE65100)),
         useMaterial3: true,
-        fontFamily: 'Arial',
+        fontFamily: 'Cairo', // يفضل إضافة خط كاهيرو
       ),
-      home: const MainNavigationScreen(),
+      home: const Directionality(
+        textDirection: TextDirection.rtl,
+        child: MainNavigationScreen(),
+      ),
     );
   }
 }
 
+// -------------------------------------------------------------------------
+// شريط التنقل السفلي
+// -------------------------------------------------------------------------
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -42,25 +52,37 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: _pages[_selectedIndex],
+      body: IndexedStack(
+        // IndexedStack بحافظ على حالة الشاشات عشان ما يرجع الفيديو يعيد من الأول
+        index: _selectedIndex,
+        children: _pages,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.deepOrange,
+        selectedItemColor: const Color(0xFFE65100),
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
         onTap: (index) => setState(() => _selectedIndex = index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_filled),
+            label: 'الرئيسية',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.quiz), label: 'الاختبار'),
-          BottomNavigationBarItem(icon: Icon(Icons.star), label: 'التقييم'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.star_rate_rounded),
+            label: 'التقييم',
+          ),
         ],
       ),
     );
   }
 }
 
-// 1. الشاشة الرئيسية: تم تحويلها إلى StatefulWidget لدعم الفيديو
+// -------------------------------------------------------------------------
+// 1. الشاشة الرئيسية (شغالة 100% مع الفيديو)
+// -------------------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -74,16 +96,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // تأكد من وضع ملف فيديو في هذا المسار أو تغيير المسار لاسم ملفك
     _controller = VideoPlayerController.asset('assets/video/jordan.mp4')
       ..initialize().then((_) {
-        setState(() {}); // تحديث الواجهة عند جاهزية الفيديو
+        setState(() {}); // تحديث الواجهة بعد تحميل الفيديو
       });
   }
 
   @override
   void dispose() {
-    _controller.dispose(); // إغلاق وحدة التحكم عند الخروج لتوفير الذاكرة
+    _controller.dispose();
     super.dispose();
   }
 
@@ -92,72 +113,83 @@ class _HomeScreenState extends State<HomeScreen> {
     return CustomScrollView(
       slivers: [
         SliverAppBar(
-          expandedHeight: 250.0,
-          floating: false,
+          expandedHeight: 280.0,
           pinned: true,
+          backgroundColor: Colors.white,
           flexibleSpace: FlexibleSpaceBar(
+            titlePadding: const EdgeInsets.only(right: 16, bottom: 16),
             title: const Text(
               'اكتشف الأردن',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                shadows: [Shadow(blurRadius: 10, color: Colors.black)],
+                fontSize: 24,
               ),
             ),
             background: Stack(
               fit: StackFit.expand,
               children: [
-                // عرض الفيديو إذا كان جاهزاً، وإلا عرض لون مؤقت
                 _controller.value.isInitialized
-                    ? AspectRatio(
-                        aspectRatio: _controller.value.aspectRatio,
-                        child: VideoPlayer(_controller),
-                      )
-                    : Container(
-                        color: Colors.black,
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                IconButton(
-                  onPressed: () async {
-                    _controller.value.isPlaying
-                        ? await _controller.play()
-                        : await _controller.pause();
-                    setState(() {});
-                  },
-                  icon: Icon(
-                    _controller.value.isPlaying
-                        ? Icons.pause_circle
-                        : Icons.play_circle,
+                    ? VideoPlayer(_controller)
+                    : Container(color: Colors.black),
+                Container(color: Colors.black.withOpacity(0.3)), // تظليل خفيف
+                Center(
+                  child: IconButton(
+                    icon: Icon(
+                      _controller.value.isPlaying
+                          ? Icons.pause_circle
+                          : Icons.play_circle,
+                      size: 65,
+                      color: Colors.white,
+                    ),
+                    onPressed: () => setState(
+                      () => _controller.value.isPlaying
+                          ? _controller.pause()
+                          : _controller.play(),
+                    ),
                   ),
                 ),
-                // طبقة تعتيم خفيفة ليظهر النص بوضوح
-                Container(color: Colors.black.withOpacity(0.2)),
               ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: const Text(
+              'أشهر المواقع السياحية',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
           ),
         ),
         SliverList(
           delegate: SliverChildListDelegate([
-            _buildSectionTitle('أشهر المواقع السياحية'),
-            _buildLocationItem(
-              'مدينة البتراء',
-              'إحدى عجائب الدنيا السبع الجديدة وردية الصخر.',
-              'assets/images/petra.jpg',
+            const LocationCard(
+              name: 'مدينة البتراء',
+              desc: 'إحدى عجائب الدنيا السبع الجديدة وردية الصخر.',
+              img: 'assets/images/petra.jpg',
             ),
-            _buildLocationItem(
-              'وادي رم',
-              'صحراء مذهلة وتجربة تخييم تحت النجوم.',
-              'assets/images/wadi-rum.webp',
+            const LocationCard(
+              name: 'وادي رم',
+              desc: 'صحراء مذهلة وتجربة تخييم تحت النجوم.',
+              img: 'assets/images/wadi-rum.webp',
             ),
-            _buildLocationItem(
-              'البحر الميت',
-              'أخفض نقطة على سطح الأرض ومياه علاجية.',
-              'assets/images/dead-sea.jpg',
+            const LocationCard(
+              name: 'البحر الميت',
+              desc: 'أخفض نقطة على سطح الأرض ومياه علاجية.',
+              img: 'assets/images/dead-sea.jpg',
             ),
-            _buildLocationItem(
-              'قلعة عجلون',
-              'معلم تاريخي إسلامي بناه عز الدين أسامة.',
-              'assets/images/ajloun.webp',
+            const LocationCard(
+              name: 'قلعة عجلون',
+              desc:
+                  'قلعة عجلون، أو ما تعرف بقلعة الربض، بنيت في عهد الدولة الأيوبية على يد عز الدين أسامة',
+              img: 'assets/images/ajloun.webp',
+            ),
+            const LocationCard(
+              name: 'أم قيس',
+              desc:
+                  'عُرفت أم قيس قديمًا باسم جدارا، وهي إحدى المدن اليونانية- الرومانية العشر (حلف المدن العشرة). وفي الأزمنة القديمة، كانت جدارا تقع في موقع استراتيجي ويمر بها عدد من الطرق التجارية التي كانت تربط سوريا وفلسطين.',
+              img: 'assets/images/umqais.webp',
             ),
             const SizedBox(height: 20),
           ]),
@@ -165,43 +197,44 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
+}
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Text(
-        title,
-        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
+class LocationCard extends StatelessWidget {
+  final String name, desc, img;
+  const LocationCard({
+    super.key,
+    required this.name,
+    required this.desc,
+    required this.img,
+  });
 
-  Widget _buildLocationItem(String name, String description, String imagePath) {
+  @override
+  Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       elevation: 5,
       child: Column(
         children: [
           Image.asset(
-            imagePath,
-            height: 180,
+            img,
+            height: 200,
             width: double.infinity,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) => Container(
-              height: 180,
-              color: Colors.grey[300],
-              child: const Icon(Icons.image_not_supported, size: 50),
+              height: 200,
+              color: Colors.grey,
+              child: const Icon(Icons.image, size: 50),
             ),
           ),
           ListTile(
             title: Text(
               name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
-            subtitle: Text(description),
-            trailing: const Icon(Icons.location_on, color: Colors.deepOrange),
+            subtitle: Text(desc, style: const TextStyle(fontSize: 14)),
+            trailing: const Icon(Icons.location_on, color: Color(0xFFE65100)),
           ),
         ],
       ),
@@ -209,7 +242,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// 2. شاشة الاختبار (تبقى كما هي)
+// -------------------------------------------------------------------------
+// 2. شاشة الاختبار (شغالة مع الخلفية وصوت التصفيق)
+// -------------------------------------------------------------------------
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
 
@@ -218,137 +253,232 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
-  int _currentQuestionIndex = 0;
-  int _totalScore = 0;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  int _currentIdx = 0;
+  int _score = 0;
+  bool _isFinished = false;
 
-  final List<Map<String, Object>> _questions = [
+  final List<Map<String, dynamic>> _questions = [
     {
-      'question': 'أين تقع البتراء؟',
+      'q': 'أين تقع البتراء؟',
       'answers': [
-        {'text': 'معان', 'score': 1},
-        {'text': 'عمان', 'score': 0},
+        {'text': 'معان', 'isCorrect': true},
+        {'text': 'عمان', 'isCorrect': false},
       ],
     },
     {
-      'question': 'ما هو اللقب الذي يطلق على وادي رم؟',
+      'q': 'ما هو لقب وادي رم؟',
       'answers': [
-        {'text': 'وادي القمر', 'score': 1},
-        {'text': 'الوادي الأخضر', 'score': 0},
+        {'text': 'وادي القمر', 'isCorrect': true},
+        {'text': 'الوادي الملون', 'isCorrect': false},
       ],
     },
     {
-      'question': 'أين يقع البحر الميت؟',
+      'q': 'أين يقع البحر الميت؟',
       'answers': [
-        {'text': 'غور الأردن', 'score': 1},
-        {'text': 'إربد', 'score': 0},
+        {'text': 'غور الأردن', 'isCorrect': true},
+        {'text': 'العقبة', 'isCorrect': false},
       ],
     },
     {
-      'question': 'من بنى قلعة عجلون؟',
+      'q': 'من بنى قلعة عجلون؟',
       'answers': [
-        {'text': 'عز الدين أسامة', 'score': 1},
-        {'text': 'الأنباط', 'score': 0},
+        {'text': 'عز الدين أسامة', 'isCorrect': true},
+        {'text': 'صلاح الدين', 'isCorrect': false},
       ],
     },
     {
-      'question': 'ما هي عاصمة الأردن؟',
+      'q': 'ما هي عاصمة الأردن؟',
       'answers': [
-        {'text': 'عمان', 'score': 1},
-        {'text': 'العقبة', 'score': 0},
+        {'text': 'عمان', 'isCorrect': true},
+        {'text': 'الزرقاء', 'isCorrect': false},
       ],
     },
   ];
 
-  void _answerQuestion(int score) {
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  void _answerQuestion(bool isCorrect) async {
+    if (isCorrect) {
+      _score++;
+      await _audioPlayer.play(
+        AssetSource('sound/clapp.mp3'),
+      ); // تشغيل صوت التصفيق
+    }
+
     setState(() {
-      _totalScore += score;
-      _currentQuestionIndex++;
+      if (_currentIdx < _questions.length - 1) {
+        _currentIdx++;
+      } else {
+        _isFinished = true;
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('اختبر معلوماتك')),
-      body: Center(
-        child: _currentQuestionIndex < _questions.length
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'السؤال ${_currentQuestionIndex + 1} من ${_questions.length}',
-                    style: const TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 20),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      _questions[_currentQuestionIndex]['question'] as String,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  ...(_questions[_currentQuestionIndex]['answers']
-                          as List<Map<String, Object>>)
-                      .map((answer) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 40,
-                          ),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.deepOrange,
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: () =>
-                                  _answerQuestion(answer['score'] as int),
-                              child: Text(answer['text'] as String),
-                            ),
-                          ),
-                        );
-                      }),
-                ],
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.emoji_events,
-                    size: 100,
-                    color: Colors.amber,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'النتيجة النهائية: $_totalScore / ${_questions.length}',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: () => setState(() {
-                      _currentQuestionIndex = 0;
-                      _totalScore = 0;
-                    }),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('إعادة الاختبار'),
-                  ),
-                ],
+    if (_isFinished) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.emoji_events, size: 100, color: Colors.amber),
+              const SizedBox(height: 20),
+              Text(
+                'نتيجتك: $_score من ${_questions.length}',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              const SizedBox(height: 30),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE65100),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => setState(() {
+                  _currentIdx = 0;
+                  _score = 0;
+                  _isFinished = false;
+                }),
+                child: const Text(
+                  'إعادة الاختبار',
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    double progress = (_currentIdx + 1) / _questions.length;
+    final currentQuestion = _questions[_currentIdx];
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          'اختبر معلوماتك',
+          style: TextStyle(
+            color: Color(0xFF8D4B38),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
+      ),
+      body: Stack(
+        children: [
+          // الخلفية الشفافة
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.08, // شفافية ممتازة عشان ما تخرب عالنص
+              child: Image.asset(
+                'assets/images/bg_outline.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox(), // عشان لو ما حطيت الصورة ما يضرب التطبيق
+              ),
+            ),
+          ),
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 8,
+                    backgroundColor: Colors.orange.shade100,
+                    color: const Color(0xFFE65100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'السؤال ${_currentIdx + 1} من ${_questions.length}',
+                style: const TextStyle(color: Colors.grey, fontSize: 18),
+              ),
+              const SizedBox(height: 60),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  currentQuestion['q'],
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2D2D2D),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              ...(currentQuestion['answers'] as List).map(
+                (ans) => _buildModernButton(ans['text'], ans['isCorrect']),
+              ),
+              const SizedBox(height: 60),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernButton(String text, bool isCorrect) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 35, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE65100),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _answerQuestion(isCorrect),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-// 3. شاشة التقييم (تبقى كما هي)
+// -------------------------------------------------------------------------
+// 3. شاشة التقييم (شغالة مع صوت التشجيع)
+// -------------------------------------------------------------------------
 class RatingScreen extends StatefulWidget {
   const RatingScreen({super.key});
 
@@ -357,57 +487,118 @@ class RatingScreen extends StatefulWidget {
 }
 
 class _RatingScreenState extends State<RatingScreen> {
-  int _userRating = 0;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  int _rating = 0;
+  final TextEditingController _commentController = TextEditingController();
 
-  void _handleRating(int rating) {
-    setState(() => _userRating = rating);
-    String message = rating >= 4
-        ? 'شكراً لتقييمك الرائع! 👏'
-        : 'شكراً لتقييمك، نسعى للأفضل دائماً.';
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  void _submitRating() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('الرجاء اختيار التقييم أولاً!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_rating >= 4) {
+      // تشغيل صوت التشجيع إذا كان التقييم 4 أو 5 نجوم
+      await _audioPlayer.play(AssetSource('sound/cheer.mp3'));
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-        backgroundColor: Colors.deepOrange,
+      const SnackBar(
+        content: Text('شكراً لتقييمك الرائع!'),
+        backgroundColor: Colors.green,
       ),
     );
+
+    // تصفير الخانات بعد الإرسال
+    setState(() {
+      _rating = 0;
+      _commentController.clear();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.rate_review, size: 80, color: Colors.deepOrange),
-          const SizedBox(height: 20),
-          const Text(
-            'قيم تجربتك مع التطبيق',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          Row(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
+        // عشان الكيبورد ما يغطي الشاشة لما تكتب
+        child: Padding(
+          padding: const EdgeInsets.only(top: 100, left: 20, right: 20),
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(5, (index) {
-              return IconButton(
-                icon: Icon(
-                  index < _userRating ? Icons.star : Icons.star_border,
-                  color: Colors.amber,
-                  size: 45,
-                ),
-                onPressed: () => _handleRating(index + 1),
-              );
-            }),
-          ),
-          if (_userRating > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 20),
-              child: Text(
-                'تقييمك الحالي: $_userRating من 5',
-                style: const TextStyle(color: Colors.grey),
+            children: [
+              const Icon(
+                Icons.rate_review_rounded,
+                size: 100,
+                color: Color(0xFFE65100),
               ),
-            ),
-        ],
+              const SizedBox(height: 30),
+              const Text(
+                'قيم تجربتك مع التطبيق',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 30),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  5,
+                  (index) => IconButton(
+                    icon: Icon(
+                      index < _rating ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 50,
+                    ),
+                    onPressed: () => setState(() => _rating = index + 1),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              TextField(
+                controller: _commentController,
+                decoration: InputDecoration(
+                  hintText: 'أضف تعليقك هنا...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+                maxLines: 4,
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE65100),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onPressed: _submitRating,
+                  child: const Text(
+                    'إرسال التقييم',
+                    style: TextStyle(fontSize: 20),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
