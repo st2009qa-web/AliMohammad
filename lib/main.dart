@@ -20,7 +20,7 @@ class JordanTourismApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE65100)),
         useMaterial3: true,
-        fontFamily: 'Cairo', // يفضل إضافة خط كاهيرو
+        fontFamily: 'Cairo', 
       ),
       home: const Directionality(
         textDirection: TextDirection.rtl,
@@ -31,7 +31,7 @@ class JordanTourismApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------------------
-// شريط التنقل السفلي
+// شريط التنقل السفلي والتحكم الذكي بالشاشات
 // -------------------------------------------------------------------------
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -43,19 +43,19 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = [
-    const HomeScreen(),
-    const QuizScreen(),
-    const RatingScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    // نمرر حالة التبويب للشاشة الرئيسية لإيقاف الفيديو عند الخروج منها
+    final List<Widget> pages = [
+      HomeScreen(isActive: _selectedIndex == 0),
+      const QuizScreen(),
+      const RatingScreen(),
+    ];
+
     return Scaffold(
       body: IndexedStack(
-        // IndexedStack بحافظ على حالة الشاشات عشان ما يرجع الفيديو يعيد من الأول
         index: _selectedIndex,
-        children: _pages,
+        children: pages,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -65,15 +65,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         type: BottomNavigationBarType.fixed,
         onTap: (index) => setState(() => _selectedIndex = index),
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            label: 'الرئيسية',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'الرئيسية'),
           BottomNavigationBarItem(icon: Icon(Icons.quiz), label: 'الاختبار'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.star_rate_rounded),
-            label: 'التقييم',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.star_rate_rounded), label: 'التقييم'),
         ],
       ),
     );
@@ -81,10 +75,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 }
 
 // -------------------------------------------------------------------------
-// 1. الشاشة الرئيسية (شغالة 100% مع الفيديو)
+// 1. الشاشة الرئيسية (مع معالجة الأخطاء وإيقاف الفيديو التلقائي)
 // -------------------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isActive; // لمعرفة ما إذا كانت الشاشة معروضة حالياً
+  const HomeScreen({super.key, required this.isActive});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -92,14 +87,31 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late VideoPlayerController _controller;
+  bool _hasVideoError = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset('assets/video/jordan.mp4')
-      ..initialize().then((_) {
-        setState(() {}); // تحديث الواجهة بعد تحميل الفيديو
-      });
+    _initVideo();
+  }
+
+  void _initVideo() async {
+    try {
+      _controller = VideoPlayerController.asset('assets/video/jordan.mp4');
+      await _controller.initialize();
+      setState(() {});
+    } catch (e) {
+      setState(() => _hasVideoError = true); // معالجة خطأ عدم وجود الفيديو
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // إذا تغيرت الشاشة (انتقل المستخدم لتبويب آخر) والفيديو يعمل، أوقفه
+    if (!widget.isActive && _controller.value.isInitialized && _controller.value.isPlaying) {
+      _controller.pause();
+    }
   }
 
   @override
@@ -118,80 +130,44 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.white,
           flexibleSpace: FlexibleSpaceBar(
             titlePadding: const EdgeInsets.only(right: 16, bottom: 16),
-            title: const Text(
-              'اكتشف الأردن',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 24,
-              ),
-            ),
+            title: const Text('اكتشف الأردن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
             background: Stack(
               fit: StackFit.expand,
               children: [
-                _controller.value.isInitialized
-                    ? VideoPlayer(_controller)
-                    : Container(color: Colors.black),
-                Container(color: Colors.black.withOpacity(0.3)), // تظليل خفيف
-                Center(
-                  child: IconButton(
-                    icon: Icon(
-                      _controller.value.isPlaying
-                          ? Icons.pause_circle
-                          : Icons.play_circle,
-                      size: 65,
-                      color: Colors.white,
-                    ),
-                    onPressed: () => setState(
-                      () => _controller.value.isPlaying
-                          ? _controller.pause()
-                          : _controller.play(),
+                if (_hasVideoError)
+                  const Center(child: Text('تعذر تحميل الفيديو', style: TextStyle(color: Colors.white))),
+                if (!_hasVideoError && _controller.value.isInitialized)
+                  VideoPlayer(_controller),
+                if (!_hasVideoError && !_controller.value.isInitialized)
+                  Container(color: Colors.black),
+                
+                Container(color: Colors.black.withOpacity(0.3)), 
+                
+                if (!_hasVideoError && _controller.value.isInitialized)
+                  Center(
+                    child: IconButton(
+                      icon: Icon(_controller.value.isPlaying ? Icons.pause_circle : Icons.play_circle, size: 65, color: Colors.white),
+                      onPressed: () => setState(() => _controller.value.isPlaying ? _controller.pause() : _controller.play()),
                     ),
                   ),
-                ),
               ],
             ),
           ),
         ),
-        SliverToBoxAdapter(
+        const SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: const Text(
-              'أشهر المواقع السياحية',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+            padding: EdgeInsets.all(16.0),
+            child: Text('أشهر المواقع السياحية', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           ),
         ),
         SliverList(
-          delegate: SliverChildListDelegate([
-            const LocationCard(
-              name: 'مدينة البتراء',
-              desc: 'إحدى عجائب الدنيا السبع الجديدة وردية الصخر.',
-              img: 'assets/images/petra.jpg',
-            ),
-            const LocationCard(
-              name: 'وادي رم',
-              desc: 'صحراء مذهلة وتجربة تخييم تحت النجوم.',
-              img: 'assets/images/wadi-rum.webp',
-            ),
-            const LocationCard(
-              name: 'البحر الميت',
-              desc: 'أخفض نقطة على سطح الأرض ومياه علاجية.',
-              img: 'assets/images/dead-sea.jpg',
-            ),
-            const LocationCard(
-              name: 'قلعة عجلون',
-              desc:
-                  'قلعة عجلون، أو ما تعرف بقلعة الربض، بنيت في عهد الدولة الأيوبية على يد عز الدين أسامة',
-              img: 'assets/images/ajloun.webp',
-            ),
-            const LocationCard(
-              name: 'أم قيس',
-              desc:
-                  'عُرفت أم قيس قديمًا باسم جدارا، وهي إحدى المدن اليونانية- الرومانية العشر (حلف المدن العشرة). وفي الأزمنة القديمة، كانت جدارا تقع في موقع استراتيجي ويمر بها عدد من الطرق التجارية التي كانت تربط سوريا وفلسطين.',
-              img: 'assets/images/umqais.webp',
-            ),
-            const SizedBox(height: 20),
+          delegate: SliverChildListDelegate(const [
+            LocationCard(name: 'مدينة البتراء', desc: 'إحدى عجائب الدنيا السبع الجديدة وردية الصخر.', img: 'assets/images/petra.jpg'),
+            LocationCard(name: 'وادي رم', desc: 'صحراء مذهلة وتجربة تخييم تحت النجوم.', img: 'assets/images/wadi-rum.webp'),
+            LocationCard(name: 'البحر الميت', desc: 'أخفض نقطة على سطح الأرض ومياه علاجية.', img: 'assets/images/dead-sea.jpg'),
+            LocationCard(name: 'قلعة عجلون', desc: 'بنيت في عهد الدولة الأيوبية على يد عز الدين أسامة.', img: 'assets/images/ajloun.webp'),
+            LocationCard(name: 'أم قيس', desc: 'إحدى المدن اليونانية- الرومانية العشر، تتميز بموقعها الاستراتيجي.', img: 'assets/images/umqais.webp'),
+            SizedBox(height: 20),
           ]),
         ),
       ],
@@ -201,12 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class LocationCard extends StatelessWidget {
   final String name, desc, img;
-  const LocationCard({
-    super.key,
-    required this.name,
-    required this.desc,
-    required this.img,
-  });
+  const LocationCard({super.key, required this.name, required this.desc, required this.img});
 
   @override
   Widget build(BuildContext context) {
@@ -217,22 +188,11 @@ class LocationCard extends StatelessWidget {
       elevation: 5,
       child: Column(
         children: [
-          Image.asset(
-            img,
-            height: 200,
-            width: double.infinity,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
-              height: 200,
-              color: Colors.grey,
-              child: const Icon(Icons.image, size: 50),
-            ),
+          Image.asset(img, height: 200, width: double.infinity, fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(height: 200, color: Colors.grey.shade300, child: const Icon(Icons.broken_image, size: 50, color: Colors.grey)),
           ),
           ListTile(
-            title: Text(
-              name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             subtitle: Text(desc, style: const TextStyle(fontSize: 14)),
             trailing: const Icon(Icons.location_on, color: Color(0xFFE65100)),
           ),
@@ -243,7 +203,7 @@ class LocationCard extends StatelessWidget {
 }
 
 // -------------------------------------------------------------------------
-// 2. شاشة الاختبار (شغالة مع الخلفية وصوت التصفيق)
+// 2. شاشة الاختبار (تعمل بنجاح مع الصوت والخلفية)
 // -------------------------------------------------------------------------
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -259,41 +219,11 @@ class _QuizScreenState extends State<QuizScreen> {
   bool _isFinished = false;
 
   final List<Map<String, dynamic>> _questions = [
-    {
-      'q': 'أين تقع البتراء؟',
-      'answers': [
-        {'text': 'معان', 'isCorrect': true},
-        {'text': 'عمان', 'isCorrect': false},
-      ],
-    },
-    {
-      'q': 'ما هو لقب وادي رم؟',
-      'answers': [
-        {'text': 'وادي القمر', 'isCorrect': true},
-        {'text': 'الوادي الملون', 'isCorrect': false},
-      ],
-    },
-    {
-      'q': 'أين يقع البحر الميت؟',
-      'answers': [
-        {'text': 'غور الأردن', 'isCorrect': true},
-        {'text': 'العقبة', 'isCorrect': false},
-      ],
-    },
-    {
-      'q': 'من بنى قلعة عجلون؟',
-      'answers': [
-        {'text': 'عز الدين أسامة', 'isCorrect': true},
-        {'text': 'صلاح الدين', 'isCorrect': false},
-      ],
-    },
-    {
-      'q': 'ما هي عاصمة الأردن؟',
-      'answers': [
-        {'text': 'عمان', 'isCorrect': true},
-        {'text': 'الزرقاء', 'isCorrect': false},
-      ],
-    },
+    {'q': 'أين تقع البتراء؟', 'answers': [{'text': 'معان', 'isCorrect': true}, {'text': 'عمان', 'isCorrect': false}]},
+    {'q': 'ما هو لقب وادي رم؟', 'answers': [{'text': 'وادي القمر', 'isCorrect': true}, {'text': 'الوادي الملون', 'isCorrect': false}]},
+    {'q': 'أين يقع البحر الميت؟', 'answers': [{'text': 'غور الأردن', 'isCorrect': true}, {'text': 'العقبة', 'isCorrect': false}]},
+    {'q': 'من بنى قلعة عجلون؟', 'answers': [{'text': 'عز الدين أسامة', 'isCorrect': true}, {'text': 'صلاح الدين', 'isCorrect': false}]},
+    {'q': 'ما هي عاصمة الأردن؟', 'answers': [{'text': 'عمان', 'isCorrect': true}, {'text': 'الزرقاء', 'isCorrect': false}]},
   ];
 
   @override
@@ -305,9 +235,11 @@ class _QuizScreenState extends State<QuizScreen> {
   void _answerQuestion(bool isCorrect) async {
     if (isCorrect) {
       _score++;
-      await _audioPlayer.play(
-        AssetSource('sound/clapp.mp3'),
-      ); // تشغيل صوت التصفيق
+      try {
+        await _audioPlayer.play(AssetSource('sounds/applause.mp3'));
+      } catch (e) {
+        debugPrint('الصوت غير موجود');
+      }
     }
 
     setState(() {
@@ -330,29 +262,13 @@ class _QuizScreenState extends State<QuizScreen> {
             children: [
               const Icon(Icons.emoji_events, size: 100, color: Colors.amber),
               const SizedBox(height: 20),
-              Text(
-                'نتيجتك: $_score من ${_questions.length}',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text('نتيجتك: $_score من ${_questions.length}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
               const SizedBox(height: 30),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE65100),
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => setState(() {
-                  _currentIdx = 0;
-                  _score = 0;
-                  _isFinished = false;
-                }),
-                child: const Text(
-                  'إعادة الاختبار',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65100), foregroundColor: Colors.white),
+                onPressed: () => setState(() { _currentIdx = 0; _score = 0; _isFinished = false; }),
+                child: const Text('إعادة الاختبار', style: TextStyle(fontSize: 18)),
+              )
             ],
           ),
         ),
@@ -364,71 +280,35 @@ class _QuizScreenState extends State<QuizScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'اختبر معلوماتك',
-          style: TextStyle(
-            color: Color(0xFF8D4B38),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('اختبر معلوماتك', style: TextStyle(color: Color(0xFF8D4B38), fontWeight: FontWeight.bold)), centerTitle: true, elevation: 0, backgroundColor: Colors.white),
       body: Stack(
         children: [
-          // الخلفية الشفافة
           Positioned.fill(
             child: Opacity(
-              opacity: 0.08, // شفافية ممتازة عشان ما تخرب عالنص
-              child: Image.asset(
-                'assets/images/bg_outline.png',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const SizedBox(), // عشان لو ما حطيت الصورة ما يضرب التطبيق
+              opacity: 0.08,
+              child: Image.asset('assets/images/bg_outline.png', fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const SizedBox(),
               ),
             ),
           ),
           Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 8,
-                    backgroundColor: Colors.orange.shade100,
-                    color: const Color(0xFFE65100),
-                  ),
+                  child: LinearProgressIndicator(value: progress, minHeight: 8, backgroundColor: Colors.orange.shade100, color: const Color(0xFFE65100)),
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
-                'السؤال ${_currentIdx + 1} من ${_questions.length}',
-                style: const TextStyle(color: Colors.grey, fontSize: 18),
-              ),
+              Text('السؤال ${_currentIdx + 1} من ${_questions.length}', style: const TextStyle(color: Colors.grey, fontSize: 18)),
               const SizedBox(height: 60),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  currentQuestion['q'],
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D2D2D),
-                  ),
-                ),
+                child: Text(currentQuestion['q'], textAlign: TextAlign.center, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D))),
               ),
               const Spacer(),
-              ...(currentQuestion['answers'] as List).map(
-                (ans) => _buildModernButton(ans['text'], ans['isCorrect']),
-              ),
+              ...(currentQuestion['answers'] as List).map((ans) => _buildModernButton(ans['text'], ans['isCorrect'])),
               const SizedBox(height: 60),
             ],
           ),
@@ -444,13 +324,7 @@ class _QuizScreenState extends State<QuizScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFE65100),
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))],
       ),
       child: Material(
         color: Colors.transparent,
@@ -459,16 +333,7 @@ class _QuizScreenState extends State<QuizScreen> {
           onTap: () => _answerQuestion(isCorrect),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
+            child: Center(child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500))),
           ),
         ),
       ),
@@ -477,7 +342,7 @@ class _QuizScreenState extends State<QuizScreen> {
 }
 
 // -------------------------------------------------------------------------
-// 3. شاشة التقييم (شغالة مع صوت التشجيع)
+// 3. شاشة التقييم (تم حل مشكلة التجاوب وصوت التشجيع)
 // -------------------------------------------------------------------------
 class RatingScreen extends StatefulWidget {
   const RatingScreen({super.key});
@@ -500,31 +365,24 @@ class _RatingScreenState extends State<RatingScreen> {
 
   void _submitRating() async {
     if (_rating == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الرجاء اختيار التقييم أولاً!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الرجاء اختيار التقييم أولاً!'), backgroundColor: Colors.red));
       return;
     }
 
     if (_rating >= 4) {
-      // تشغيل صوت التشجيع إذا كان التقييم 4 أو 5 نجوم
-      await _audioPlayer.play(AssetSource('sound/cheer.mp3'));
+      try {
+        await _audioPlayer.play(AssetSource('sounds/cheer.mp3'));
+      } catch (e) {
+        debugPrint('الصوت غير موجود');
+      }
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('شكراً لتقييمك الرائع!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-
-    // تصفير الخانات بعد الإرسال
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شكراً لتقييمك الرائع!'), backgroundColor: Colors.green));
+    
     setState(() {
       _rating = 0;
       _commentController.clear();
+      FocusScope.of(context).unfocus(); // إخفاء لوحة المفاتيح بعد الإرسال
     });
   }
 
@@ -532,71 +390,51 @@ class _RatingScreenState extends State<RatingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        // عشان الكيبورد ما يغطي الشاشة لما تكتب
-        child: Padding(
-          padding: const EdgeInsets.only(top: 100, left: 20, right: 20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.rate_review_rounded,
-                size: 100,
-                color: Color(0xFFE65100),
-              ),
-              const SizedBox(height: 30),
-              const Text(
-                'قيم تجربتك مع التطبيق',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 30),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  5,
-                  (index) => IconButton(
-                    icon: Icon(
-                      index < _rating ? Icons.star : Icons.star_border,
-                      color: Colors.amber,
-                      size: 50,
-                    ),
+      body: SafeArea(
+        child: Center( // Center لحل مشكلة التجاوب مع الـ Keyboard
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.rate_review_rounded, size: 100, color: Color(0xFFE65100)),
+                const SizedBox(height: 30),
+                const Text('قيم تجربتك مع التطبيق', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 30),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) => IconButton(
+                    icon: Icon(index < _rating ? Icons.star : Icons.star_border, color: Colors.amber, size: 50),
                     onPressed: () => setState(() => _rating = index + 1),
-                  ),
+                  )),
                 ),
-              ),
-              const SizedBox(height: 30),
-              TextField(
-                controller: _commentController,
-                decoration: InputDecoration(
-                  hintText: 'أضف تعليقك هنا...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
+                const SizedBox(height: 30),
+                TextField(
+                  controller: _commentController,
+                  decoration: InputDecoration(
+                    hintText: 'أضف تعليقك هنا...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
                   ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
+                  maxLines: 4,
                 ),
-                maxLines: 4,
-              ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE65100),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                const SizedBox(height: 40),
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE65100),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     ),
-                  ),
-                  onPressed: _submitRating,
-                  child: const Text(
-                    'إرسال التقييم',
-                    style: TextStyle(fontSize: 20),
+                    onPressed: _submitRating,
+                    child: const Text('إرسال التقييم', style: TextStyle(fontSize: 20)),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
